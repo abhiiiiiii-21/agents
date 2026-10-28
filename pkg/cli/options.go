@@ -71,20 +71,21 @@ func (opts *GlobalOptions) RESTConfig() (*rest.Config, error) {
 	}
 	clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
 
+	var config *rest.Config
 	if opts.KubeConfig == "" && opts.Context == "" {
 		if cfg, err := inClusterConfigFn(); err == nil {
-			if err := opts.resolveNamespace(clientConfig); err != nil {
-				return nil, err
-			}
-			return cfg, nil
+			config = cfg
 		} else {
 			fmt.Fprintf(os.Stderr, "Warning: in-cluster config failed (%v), falling back to kubeconfig\n", err)
 		}
 	}
 
-	config, err := clientConfig.ClientConfig()
-	if err != nil {
-		return nil, fmt.Errorf("failed to build kubeconfig: %w", err)
+	if config == nil {
+		var err error
+		config, err = clientConfig.ClientConfig()
+		if err != nil {
+			return nil, fmt.Errorf("failed to build kubeconfig: %w", err)
+		}
 	}
 	if err := opts.resolveNamespace(clientConfig); err != nil {
 		return nil, err

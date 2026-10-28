@@ -69,7 +69,9 @@ func TestRESTConfig(t *testing.T) {
 		context         string
 		inClusterErr    error
 		inClusterConfig *rest.Config
-		expectError     string
+		// envKubeConfig, when set, is written to the file KUBECONFIG points at.
+		envKubeConfig string
+		expectError   string
 	}{
 		{
 			name:            "in-cluster config succeeds",
@@ -92,12 +94,29 @@ func TestRESTConfig(t *testing.T) {
 			inClusterErr: nil,
 			expectError:  "failed to build kubeconfig",
 		},
+		{
+			name:            "in-cluster succeeds, kubeconfig current-context is missing",
+			inClusterConfig: &rest.Config{Host: "https://kubernetes.default.svc"},
+			envKubeConfig: `apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: https://127.0.0.1:6443
+  name: test-cluster
+current-context: missing-context
+`,
+			expectError: "failed to resolve namespace",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Keep the default kubeconfig lookup away from the developer's real config.
-			t.Setenv("KUBECONFIG", filepath.Join(t.TempDir(), "missing"))
+			envKubeConfigPath := filepath.Join(t.TempDir(), "config")
+			if tt.envKubeConfig != "" {
+				assert.NoError(t, os.WriteFile(envKubeConfigPath, []byte(tt.envKubeConfig), 0600))
+			}
+			t.Setenv("KUBECONFIG", envKubeConfigPath)
 			// Override in-cluster config function
 			origFn := inClusterConfigFn
 			defer func() { inClusterConfigFn = origFn }()
